@@ -1,0 +1,20 @@
+# Environment Variables
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+
+# Data & Persistence
+data/vector_db/
+data/chat_log.json
+data/prompt_history.json
+data/raw_pdfs/*.pdf
+
+# IDEs
+.vscode/
+.idea/
