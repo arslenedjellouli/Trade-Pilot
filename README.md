@@ -58,7 +58,7 @@ graph TD
 ### 2. Setup
 ```powershell
 # Clone the repository
-git clone [your-repo-link]
+git clone https://github.com/arslenedjellouli/Group_Project.git
 cd agenticRag
 
 # Create Virtual Environment
