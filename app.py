@@ -126,8 +126,12 @@ st.markdown("""
 
 # --- Storage Management (Cookies with Local Fallback) ---
 if HAS_COOKIES:
+    cookie_password = os.getenv("COOKIE_PASSWORD")
+    if not cookie_password:
+        st.error("COOKIE_PASSWORD must be configured before using cookie-based history.")
+        st.stop()
     cookies = EncryptedCookieManager(
-        password=os.getenv("COOKIE_PASSWORD", "ensia-export-secure-key-2026"),
+        password=cookie_password,
     )
     if not cookies.ready():
         st.stop()
