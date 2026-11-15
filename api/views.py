@@ -3,6 +3,7 @@ Django API views for ENSIA Export AI Engine.
 All endpoints are CSRF-exempt JSON APIs consumed by the React frontend.
 """
 import json
+import logging
 import os
 import re
 import secrets
@@ -24,6 +25,9 @@ from .models import Product
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+logger = logging.getLogger(__name__)
+_UPLOAD_SUFFIXES = {'.jpg', '.jpeg', '.png', '.webp'}
+_MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 
 
 # ── Lazy AI module loaders ────────────────────────────────────────────────────
@@ -142,6 +146,48 @@ def _err(msg, status=400):
     return JsonResponse({'error': msg}, status=status)
 
 
+def _server_error(message, exc):
+    logger.exception('%s: %s', message, exc)
+    return _err(message, 500)
+
+
+def _save_upload(upload):
+    suffix = Path(upload.name or '').suffix.lower()
+    if suffix not in _UPLOAD_SUFFIXES:
+        raise ValueError('Unsupported image type')
+    if upload.size > _MAX_UPLOAD_BYTES:
+        raise ValueError('Image exceeds the 10 MB limit')
+
+    upload_dir = settings.MEDIA_ROOT / 'ocr_uploads'
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    filename = f'{uuid.uuid4().hex}{suffix}'
+    relative_path = Path('ocr_uploads') / filename
+    image_path = settings.MEDIA_ROOT / relative_path
+    with image_path.open('wb') as destination:
+        for chunk in upload.chunks():
+            destination.write(chunk)
+    return image_path, f'{settings.MEDIA_URL}{relative_path.as_posix()}'
+
+
+def _resolve_media_path(value):
+    if not value:
+        return None
+    media_root = settings.MEDIA_ROOT.resolve()
+    path_value = str(value)
+    if path_value.startswith(settings.MEDIA_URL):
+        path_value = path_value[len(settings.MEDIA_URL):]
+    candidate = Path(path_value)
+    if not candidate.is_absolute():
+        candidate = media_root / path_value.removeprefix('media/')
+    try:
+        resolved = candidate.resolve()
+        if not resolved.is_relative_to(media_root):
+            return None
+        return resolved
+    except (OSError, ValueError):
+        return None
+
+
 def _auth_token(email):
     return TimestampSigner(key=settings.SECRET_KEY).sign(email)
 
@@ -250,7 +296,10 @@ class ProductDetailView(View):
         product = self._get_or_404(pid)
         if not product:
             return _err('Product not found', 404)
+        image_path = _resolve_media_path(product.image_path)
         product.delete()
+        if image_path and image_path.exists():
+            image_path.unlink()
         return JsonResponse({'deleted': True})
 
 
@@ -264,19 +313,12 @@ class AIPipelineView(View):
 
         lang   = request.POST.get('lang', 'en')
         img    = request.FILES['image']
-        suffix = Path(img.name or 'image.jpg').suffix or '.jpg'
-
-        upload_dir = settings.MEDIA_ROOT / 'ocr_uploads'
-        upload_dir.mkdir(parents=True, exist_ok=True)
-        image_path = str(upload_dir / f'{uuid.uuid4().hex}{suffix}')
-
-        with open(image_path, 'wb') as f:
-            for chunk in img.chunks():
-                f.write(chunk)
+        image_path = None
 
         try:
+            image_path, image_url = _save_upload(img)
             print('[pipeline] OCR ...', flush=True)
-            ocr_result   = _ocr()(image_path)
+            ocr_result   = _ocr()(str(image_path))
             raw_text     = _format_ocr(ocr_result)
 
             name_hint     = (ocr_result.get('basic_info') or {}).get('product_name', '')
@@ -293,11 +335,17 @@ class AIPipelineView(View):
             print('[pipeline] Done.', flush=True)
             return JsonResponse({
                 'productData': product_data,
-                'imagePath':   image_path,
+                'imagePath':   image_url,
                 'rawOcr':      raw_text,
             })
+        except ValueError as exc:
+            if image_path and image_path.exists():
+                image_path.unlink()
+            return _err(str(exc), 400)
         except Exception as exc:
-            return _err(str(exc), 500)
+            if image_path and image_path.exists():
+                image_path.unlink()
+            return _server_error('Product pipeline failed', exc)
 
 
 # ── AI: PDF generation ────────────────────────────────────────────────────────
@@ -313,11 +361,12 @@ class AIGeneratePDFView(View):
         tmp_dir = tempfile.mkdtemp(prefix='ensia_pdf_')
         try:
             output_path = os.path.join(tmp_dir, 'product_sheet.pdf')
-            _pdf()(product_data, image_path, output_path, lang)
+            local_image_path = _resolve_media_path(image_path)
+            _pdf()(product_data, str(local_image_path) if local_image_path else None, output_path, lang)
             with open(output_path, 'rb') as f:
                 pdf_bytes = f.read()
         except Exception as exc:
-            return _err(str(exc), 500)
+            return _server_error('PDF generation failed', exc)
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
 
@@ -347,14 +396,14 @@ class AIGenerateProductView(View):
                 'sellingPoints': pd.get('features', []),
                 'benefits':     [pd.get('category', ''), pd.get('country_of_origin', ''), pd.get('format', '')],
                 'compliance':   {
-                    'score': 80, 'warnings': [],
+                    'score': None, 'warnings': [],
                     'certifications': [c.strip() for c in pd.get('certifications', '').split(',') if c.strip()],
                     'riskClaims': [],
                 },
                 'productData': pd,
             })
         except Exception as exc:
-            return _err(str(exc), 500)
+            return _server_error('Product generation failed', exc)
 
 
 # ── AI: translate ─────────────────────────────────────────────────────────────
@@ -367,7 +416,7 @@ class AITranslateView(View):
             translated = _translate()(data.get('productData', {}), data.get('lang', 'en'))
             return JsonResponse({'productData': translated})
         except Exception as exc:
-            return _err(str(exc), 500)
+            return _server_error('Translation failed', exc)
 
 
 # ── AI: improve suggestions ───────────────────────────────────────────────────
@@ -403,20 +452,18 @@ class ChatOCRView(View):
             return _err('No image provided')
 
         img        = request.FILES['image']
-        suffix     = Path(img.name or 'image.jpg').suffix or '.jpg'
-        upload_dir = settings.MEDIA_ROOT / 'ocr_uploads'
-        upload_dir.mkdir(parents=True, exist_ok=True)
-        image_path = str(upload_dir / f'{uuid.uuid4().hex}{suffix}')
-
-        with open(image_path, 'wb') as f:
-            for chunk in img.chunks():
-                f.write(chunk)
-
+        image_path = None
         try:
-            result = _ocr()(image_path)
-            return JsonResponse({'result': result, 'imagePath': image_path})
+            image_path, _ = _save_upload(img)
+            result = _ocr()(str(image_path))
+            return JsonResponse({'result': result})
+        except ValueError as exc:
+            return _err(str(exc), 400)
         except Exception as exc:
-            return _err(str(exc), 500)
+            return _server_error('Image audit failed', exc)
+        finally:
+            if image_path and image_path.exists():
+                image_path.unlink()
 
 
 # ── Chat: streaming agent response (SSE) ─────────────────────────────────────

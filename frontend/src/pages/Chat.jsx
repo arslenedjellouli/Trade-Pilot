@@ -5,6 +5,7 @@ import FileUpload from '../components/ui/FileUpload'
 import Button from '../components/ui/Button'
 
 const STORAGE_KEY = 'ensia_chat_messages'
+const API_URL = import.meta.env.VITE_API_URL || '/api'
 
 function loadMessages() {
   try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]') } catch { return [] }
@@ -65,7 +66,7 @@ export default function Chat() {
     const form = new FormData()
     form.append('image', files[0])
     try {
-      const res  = await fetch('http://localhost:8000/api/chat/ocr/', {
+      const res  = await fetch(`${API_URL}/chat/ocr/`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
         body: form,
@@ -93,7 +94,7 @@ export default function Chat() {
     setIsStreaming(true)
 
     try {
-      const res = await fetch('http://localhost:8000/api/chat/message/', {
+      const res = await fetch(`${API_URL}/chat/message/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -114,8 +115,9 @@ export default function Chat() {
       const decoder = new TextDecoder()
       let buffer    = ''
       let full      = ''
+      let finished  = false
 
-      while (true) {
+      while (!finished) {
         const { done, value } = await reader.read()
         if (done) break
         buffer += decoder.decode(value, { stream: true })
@@ -125,7 +127,10 @@ export default function Chat() {
         for (const line of lines) {
           if (!line.startsWith('data: ')) continue
           const raw = line.slice(6).trim()
-          if (raw === '[DONE]') break
+          if (raw === '[DONE]') {
+            finished = true
+            break
+          }
           try {
             const parsed = JSON.parse(raw)
             if (parsed.error) throw new Error(parsed.error)

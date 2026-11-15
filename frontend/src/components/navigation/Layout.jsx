@@ -1,5 +1,4 @@
-import { Outlet, useNavigate } from 'react-router-dom'
-import { useAppStore } from '../../store/useAppStore'
+import { Outlet } from 'react-router-dom'
 import Sidebar from './Sidebar'
 
 export default function Layout() {

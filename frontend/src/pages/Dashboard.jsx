@@ -10,13 +10,16 @@ const StatIcon = ({ path }) => (
 )
 
 export default function Dashboard() {
-  const { products, loading, fetchProducts } = useAppStore()
+  const { products, loading, error, fetchProducts } = useAppStore()
 
   useEffect(() => { fetchProducts() }, [])
 
-  const pdfCount  = products.filter(p => p.imagePath).length
-  const langCount = [...new Set(products.map(p => p.lang))].length || (products.length ? 1 : 0)
-  const avgScore  = 92
+  const assessedScores = products
+    .map(p => Number(p.compliance?.score))
+    .filter(score => Number.isFinite(score))
+  const avgScore = assessedScores.length
+    ? Math.round(assessedScores.reduce((sum, score) => sum + score, 0) / assessedScores.length)
+    : null
 
   const stats = [
     {
@@ -25,18 +28,18 @@ export default function Dashboard() {
       icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
     },
     {
-      label: 'Catalogs',
-      value: pdfCount,
+      label: 'With images',
+      value: products.filter(p => p.imagePath).length,
       icon: 'M12 4v16m8-8H4',
     },
     {
-      label: 'Active Jobs',
-      value: langCount,
+      label: 'Languages',
+      value: new Set(products.map(p => p.lang)).size,
       icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z',
     },
     {
       label: 'Compliance Score',
-      value: `${avgScore}%`,
+      value: avgScore === null ? '—' : `${avgScore}%`,
       icon: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z',
     },
   ]
@@ -78,6 +81,12 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {error && (
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+          {error}
+        </div>
+      )}
 
       <div className="grid gap-6 xl:grid-cols-[1.5fr_0.8fr]">
         <div className="min-w-0 space-y-6">
@@ -149,17 +158,14 @@ export default function Dashboard() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {products.slice(0, 3).map((p, i) => {
-                    const statuses = ['completed', 'processing', 'pending']
-                    const colors   = ['green', 'purple', 'yellow']
-                    const tasks    = ['Generate catalog', 'AI product sheet', 'Compliance review']
-                    const times    = ['2m ago', 'just now', '1m ago']
+                  {products.slice(0, 3).map((p) => {
+                    const latestHistory = p.history?.[0]
                     return (
                       <tr key={p.id} className="transition hover:bg-slate-50/70">
-                        <td className="px-6 py-4 font-semibold text-slate-700">{tasks[i % 3]}</td>
+                        <td className="px-6 py-4 font-semibold text-slate-700">{latestHistory?.note || 'Product created'}</td>
                         <td className="px-6 py-4 text-slate-500">{p.productData?.category || '—'}</td>
-                        <td className="px-6 py-4"><Badge color={colors[i % 3]}>{statuses[i % 3]}</Badge></td>
-                        <td className="px-6 py-4 text-slate-400">{times[i % 3]}</td>
+                        <td className="px-6 py-4"><Badge color="green">recorded</Badge></td>
+                        <td className="px-6 py-4 text-slate-400">{latestHistory?.date || '—'}</td>
                       </tr>
                     )
                   })}
@@ -181,23 +187,25 @@ export default function Dashboard() {
               <Link to="/products/new" className="flex w-full items-center justify-center rounded-full bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_12px_30px_rgba(15,23,42,0.18)] transition hover:-translate-y-0.5 hover:bg-slate-800">
                 New product
               </Link>
-              <button className="flex w-full items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:text-slate-900">
+              <Link to="/products/new" className="flex w-full items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:text-slate-900">
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
                 New catalog
-              </button>
+              </Link>
             </div>
           </div>
 
           <div className="app-panel p-6">
             <h3 className="text-sm font-semibold tracking-tight text-slate-900">Compliance score</h3>
-            <p className="mt-3 text-4xl font-bold tracking-tight text-blue-600">{avgScore}%</p>
+            <p className="mt-3 text-4xl font-bold tracking-tight text-blue-600">{avgScore === null ? '—' : `${avgScore}%`}</p>
             <p className="mt-1 text-xs uppercase tracking-[0.22em] text-slate-400">Average</p>
             <div className="mt-4 h-2 w-full rounded-full bg-slate-100">
-              <div className="h-2 rounded-full bg-gradient-to-r from-blue-500 to-sky-500 transition-all" style={{ width: `${avgScore}%` }} />
+              <div className="h-2 rounded-full bg-gradient-to-r from-blue-500 to-sky-500 transition-all" style={{ width: `${avgScore || 0}%` }} />
             </div>
-            <p className="mt-3 text-sm text-slate-500">No critical warnings</p>
+            <p className="mt-3 text-sm text-slate-500">
+              {avgScore === null ? 'No assessments yet' : 'Based on recorded assessments'}
+            </p>
           </div>
 
           <div className="app-panel p-6">

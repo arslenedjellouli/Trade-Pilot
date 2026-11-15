@@ -119,18 +119,29 @@ export default function ProductWizard() {
   }
 
   const save = async () => {
-    const features = (fields.features || []).filter(Boolean)
-    const pd       = { ...fields, features }
-    const product  = await addProduct({
-      name:        pd.name || 'Untitled',
-      productData: pd,
-      imagePath:   imagePath || '',
-      lang,
-      markets,
-      compliance: { score: 82, warnings:[], certifications: fields.certifications ? fields.certifications.split(',').map(s=>s.trim()).filter(Boolean) : [], riskClaims:[] },
-      history:    [{ date: new Date().toISOString().slice(0,10), note: 'Created via AI pipeline' }],
-    })
-    navigate(`/products/${product.id}`)
+    setError(null)
+    try {
+      const features = (fields.features || []).filter(Boolean)
+      const pd       = { ...fields, features }
+      const product  = await addProduct({
+        name:        pd.name || 'Untitled',
+        productData: pd,
+        imagePath:   imagePath || '',
+        lang,
+        markets,
+        compliance: {
+          warnings: [],
+          certifications: fields.certifications
+            ? fields.certifications.split(',').map(s => s.trim()).filter(Boolean)
+            : [],
+          riskClaims: [],
+        },
+        history: [{ date: new Date().toISOString().slice(0,10), note: 'Created via AI pipeline' }],
+      })
+      navigate(`/products/${product.id}`)
+    } catch (e) {
+      setError(e?.response?.data?.error || e.message || 'Unable to save product')
+    }
   }
 
   return (
