@@ -1,0 +1,32 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+
+# Local data and generated files
+db.sqlite3
+*.sqlite3
+data/vector_db/
+data/chat_log.json
+data/prompt_history.json
+data/raw_pdfs/*.pdf
+media/ocr_uploads/
+media/generated/
+media/
+staticfiles/
+frontend/node_modules/
+frontend/dist/
+
+# IDEs
+.vscode/
+.idea/
+.claude/
+*.log
