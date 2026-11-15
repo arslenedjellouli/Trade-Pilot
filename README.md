@@ -1,189 +1,141 @@
-# ENSIA Export AI Engine
-### Agentic RAG + Product Sheet Generator (2026 Edition)
+# TradePilot
 
-The **ENSIA Export AI Engine** is a two-in-one platform:
-1. **Compliance Chat** — an agentic RAG assistant that answers export compliance questions using NVIDIA NIM + ChromaDB.
-2. **Product Sheet Generator** — an end-to-end pipeline that turns a product photo into a professionally-formatted, multilingual PDF export sheet.
+TradePilot is an AI-assisted export workspace for creating product sheets,
+reviewing compliance information, and preparing multilingual PDF exports.
 
----
+The repository contains:
 
-## What the tool does
+- A React/Vite workspace for product creation, editing, translation, and chat.
+- A Django API for product persistence and AI pipeline endpoints.
+- A Streamlit application for the original compliance-chat and product-sheet
+  workflows.
+- Optional RAG ingestion and retrieval over local compliance documents.
 
-| Page | Function |
-|------|----------|
-| **Home (app.py)** | Chat with an AI compliance specialist. Upload product images for instant multimodal audit. Ask questions about Algerian export regulations, certifications, and ESG claims. |
-| **Product Sheet Generator** | Upload an image → OCR extracts text → Gemini/Groq augments into structured data → Mistral translates → reportlab generates a downloadable PDF. |
+## Features
 
----
+- Product wizard with image-based OCR and AI enrichment.
+- Product editor with multilingual translation and PDF generation.
+- Compliance chat backed by retrieval and agent tools.
+- Persistent product records through Django and SQLite.
+- Configurable API authentication using signed, expiring bearer tokens.
+- Local-first development with no required third-party service for the UI shell.
 
-## Installation
+AI calls require the relevant provider keys and are intentionally not made
+without configuration.
 
-```bash
-# 1. Clone / enter the repo
-git clone https://github.com/arslenedjellouli/Group_Project.git
-cd Group_Project-AgenticRAG_OCR
+## Technology
 
-# 2. Create and activate a virtual environment
-python -m venv venv
-# Windows:
-.\venv\Scripts\activate
-# macOS / Linux:
-source venv/bin/activate
+- Python 3.11+ and Django
+- Streamlit
+- React 19, Vite, Tailwind CSS, and Zustand
+- LangChain/LangGraph and ChromaDB
+- NVIDIA NIM, Gemini, Groq, and Mistral integrations
+- SQLite for local development
 
-# 3. Install dependencies
+## Quick start
+
+### 1. Configure Python
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+Copy-Item .env.example .env
 ```
 
-> **Arabic PDF support** requires two extra packages already listed in requirements.txt:
-> `arabic-reshaper` and `python-bidi`. Install them the same way.
+Set a strong `DJANGO_SECRET_KEY`, `AUTH_EMAIL`, and `AUTH_PASSWORD` in `.env`.
+Add the provider keys for the AI features you plan to use.
 
----
+### 2. Initialize the API database
 
-## Getting free API keys
-
-| Service | Purpose | Free tier link |
-|---------|---------|----------------|
-| **NVIDIA NIM** | Compliance agent LLM + Vision OCR | https://build.nvidia.com |
-| **Google Gemini** | Product data augmentation (primary) | https://aistudio.google.com/app/apikey |
-| **Groq** | Augmentation fallback (llama-3.1-8b-instant) | https://console.groq.com/keys |
-| **Mistral AI** | Translation (FR / AR / ES) | https://console.mistral.ai/api-keys/ |
-
-All free tiers are sufficient for development and demo usage.
-
----
-
-## Environment setup
-
-Copy `.env.example` to `.env` and fill in your keys:
-
-```bash
-cp .env.example .env
+```powershell
+python manage.py migrate
+python manage.py check
 ```
 
-```env
-NVIDIA_API_KEY=nvapi-...
-GEMINI_API_KEY=AIza...
-GROQ_API_KEY=gsk_...
-MISTRAL_API_KEY=...
-COOKIE_PASSWORD=change_this_to_a_strong_secret
+The local SQLite database is generated at runtime and is intentionally ignored
+by Git. Never commit it or uploaded media.
+
+### 3. Start the Django API
+
+```powershell
+python manage.py runserver 127.0.0.1:8000
 ```
 
-Keys are loaded via `python-dotenv` — never hardcoded.
+The API is available at `http://127.0.0.1:8000/api/`.
 
----
+### 4. Start the React frontend
 
-## Running the app
+```powershell
+cd frontend
+npm install
+npm run dev
+```
 
-```bash
+The frontend is available at `http://localhost:5173`. Set
+`VITE_API_URL=http://127.0.0.1:8000/api` when the frontend is hosted separately;
+otherwise the default `/api` path works with a reverse proxy.
+
+### 5. Optional Streamlit application
+
+```powershell
 streamlit run app.py
 ```
 
-Open http://localhost:8501. The sidebar shows two pages:
-- **app** — Compliance Chat (home page)
-- **Product Sheet** — Product Sheet Generator
+Open `http://localhost:8501`.
 
----
+## RAG ingestion
 
-## Pipeline architecture
+Place approved compliance PDFs in `data/raw_pdfs/` and run:
 
-```
-Product Image (JPG/PNG)
-        │
-        ▼
-┌─────────────────────────────────────────────────┐
-│  Step 1 — OCR                                   │
-│  tools/gemini_ocr.py → analyze_export_product() │
-│  NVIDIA Nemotron-Nano-VL vision model            │
-└──────────────────────┬──────────────────────────┘
-                       │ JSON audit dict
-                       ▼
-┌─────────────────────────────────────────────────┐
-│  Step 2 — RAG context (optional)                │
-│  tools/rag.py → query_compliance_documents()    │
-│  ChromaDB + NVIDIA Nemotron-Embed-VL            │
-│  (silently skipped if DB not initialised)       │
-└──────────────────────┬──────────────────────────┘
-                       │ compliance context string
-                       ▼
-┌─────────────────────────────────────────────────┐
-│  Step 3 — LLM Augmentation                      │
-│  modules/augment.py → augment_product_data()    │
-│  Primary : Google Gemini 1.5 Flash              │
-│  Fallback: Groq llama-3.1-8b-instant            │
-│  Output  : structured dict (name, brand, …)     │
-└──────────────────────┬──────────────────────────┘
-                       │ structured dict
-                       ▼
-┌─────────────────────────────────────────────────┐
-│  Step 4 — Translation                           │
-│  modules/translator.py → translate_product_data()│
-│  Mistral AI mistral-small-latest                │
-│  Skipped when output language is English        │
-│  Arabic: Modern Standard Arabic (MSA) enforced  │
-└──────────────────────┬──────────────────────────┘
-                       │ translated dict
-                       ▼
-┌─────────────────────────────────────────────────┐
-│  Step 5 — PDF Generation                        │
-│  modules/pdf_generator.py → generate_pdf()      │
-│  reportlab · header banner · two-column layout  │
-│  Arabic: BiDi + reshaper for RTL rendering      │
-└──────────────────────┬──────────────────────────┘
-                       │ PDF file path
-                       ▼
-              ⬇️ Download button in Streamlit
-```
-
-### Smart caching
-
-Session state avoids redundant API calls:
-- **OCR + Augmentation** run once per uploaded image.
-- If the user changes the **output language** and clicks Generate again, only Translation and PDF steps re-run.
-
----
-
-## Folder structure
-
-```
-app.py                        # Streamlit entry point (Compliance Chat)
-pages/
-  1_Product_Sheet.py          # Product Sheet Generator page
-modules/
-  augment.py                  # LLM augmentation (Gemini + Groq)
-  translator.py               # Translation (Mistral AI)
-  pdf_generator.py            # PDF layout (reportlab)
-tools/
-  gemini_ocr.py               # OCR via NVIDIA NIM Vision (existing)
-  rag.py                      # RAG tool — ChromaDB (existing)
-  browser.py                  # Web browsing tool (existing)
-  vision.py                   # Vision analysis tool (existing)
-core/
-  agent.py                    # LangGraph ReAct agent (existing)
-  ingestion.py                # PDF ingestion pipeline (existing)
-data/
-  raw_pdfs/                   # Place compliance PDFs here for ingestion
-  vector_db/                  # ChromaDB persistent store (auto-generated)
-  product_sheets/             # Generated PDFs (auto-created)
-.env.example                  # Environment variable template
-requirements.txt              # All dependencies
-```
-
----
-
-## Initialising the compliance RAG (optional)
-
-Place your compliance PDF documents in `data/raw_pdfs/` and run:
-
-```bash
+```powershell
 python core/ingestion.py
 ```
 
-This ingests the documents into ChromaDB and makes them available for both the Compliance Chat agent and the Product Sheet augmentation step.
+The generated Chroma database is local runtime data and is excluded from Git.
+NVIDIA credentials are required for embeddings and multimodal extraction.
 
----
+## Project structure
 
-## Academic context
+```text
+api/                    Django product and AI API
+core/                   Agent orchestration and document ingestion
+ensia_project/          Django settings and URL configuration
+frontend/               React/Vite application
+modules/                Augmentation, translation, and PDF generation
+pages/                  Streamlit product-sheet page
+tools/                  Browser, OCR, RAG, and vision tools
+specs/                  Existing technical specifications
+```
 
-**Project**: ENSIA 3rd Year Group Project (S2 2026)
-**Track**: Advanced Agentic Systems & Multimodal AI
-**Status**: Production Ready
+## Testing and validation
+
+```powershell
+$env:DJANGO_SECRET_KEY = "local-test-secret"
+$env:AUTH_EMAIL = "admin@example.com"
+$env:AUTH_PASSWORD = "local-test-password"
+$env:DEBUG = "false"
+python manage.py check
+python -m compileall -q .
+cd frontend
+npm run build
+```
+
+The repository currently has focused smoke validation but no broad automated
+test suite. External AI behavior requires provider-backed integration tests and
+should be tested with non-production credentials.
+
+## Security
+
+- Copy `.env.example`; do not commit `.env`.
+- Rotate any credential that has ever been exposed outside a secret manager.
+- Use HTTPS in deployed environments.
+- Configure explicit `ALLOWED_HOSTS` and `CORS_ALLOWED_ORIGINS`.
+- The browser tool only accepts HTTPS and blocks private, loopback, link-local,
+  and reserved IP addresses.
+- Product uploads, SQLite data, logs, vector stores, and generated files are
+  ignored by default.
+
+## License
+
+This project is released under the MIT License. See [LICENSE](LICENSE).
