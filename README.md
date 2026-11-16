@@ -1,14 +1,14 @@
 # TradePilot
 
-TradePilot is an AI-assisted export workspace for turning product information
-and images into multilingual, export-ready product sheets. It combines a
-React workspace, a Django API, AI enrichment services, compliance retrieval,
-and an optional Streamlit interface.
+TradePilot is an AI-assisted export workspace for transforming product images
+and information into polished, multilingual product sheets. It brings
+research, compliance context, content generation, translation, review, and
+PDF export into one workflow.
 
-It is designed for teams that need to move from a product image or rough
-product information to a reviewed export document. The application keeps the
-generated product record editable: AI suggestions are inputs for human review,
-not a replacement for approval.
+Built with React, Django, and configurable AI providers, TradePilot helps
+teams move from a product image or rough product information to a reviewed
+export document. Every generated product remains editable so teams can refine
+content before it is shared.
 
 ## What the project does
 
@@ -31,7 +31,7 @@ The React frontend provides:
 
 The dashboard opens directly without a login in the current local/demo
 configuration. This is intentional for the supplied demonstration workflow;
-see [Security and privacy](#security-and-privacy) before deploying it on a
+see [Deployment and responsible use](#deployment-and-responsible-use) before deploying it on a
 shared or public network.
 
 ### AI product pipeline
@@ -57,15 +57,16 @@ OCR, enrichment, translation, chat, and RAG features.
 | Translation | Product fields and target language | Localized product content | Mistral |
 | Product export | Reviewed product record | PDF product sheet | ReportLab |
 
-### Two available interfaces
+### Interfaces
 
 | Interface | Purpose | URL |
 |---|---|---|
 | React + Django | Main product workspace and API | `http://localhost:5173` |
 | Streamlit | Original compliance chat and product-sheet workflow | `http://localhost:8501` |
 
-The React application is the recommended interface for new development. The
-Streamlit application remains available for the original workflow and demos.
+The React application is the primary interface. The Streamlit application
+remains available for the original workflow, rapid experimentation, and
+demos.
 
 ## Quick start
 
@@ -321,30 +322,23 @@ npm audit
 The test suite includes product API and response-shape regressions. Provider-backed AI behavior should be tested separately with
 non-production credentials.
 
-## Current limitations
-
-- AI output depends on external provider availability, model behavior, and
-  configured quotas.
-- The default SQLite setup is intended for local development and small demos,
-  not high-concurrency production workloads.
-- The current dashboard/API mode has no user authentication or authorization.
-- Compliance answers are informational and must be reviewed against the
-  applicable regulations and source documents.
-
-## Security and privacy
+## Deployment and responsible use
 
 - Never commit `.env`, API keys, passwords, SQLite databases, uploads, logs, or
   vector-store files.
-- Rotate credentials immediately if they are exposed.
-- Configure explicit `ALLOWED_HOSTS` and `CORS_ALLOWED_ORIGINS` in deployment.
-- Use HTTPS for deployed frontend/API traffic.
+- Configure explicit `ALLOWED_HOSTS` and `CORS_ALLOWED_ORIGINS` for each
+  deployment.
+- Use HTTPS and a production-grade database when deploying beyond local
+  development.
 - Uploaded images are size- and extension-validated; standalone OCR uploads
   are deleted after processing.
 - The browser tool only accepts HTTPS and blocks private, loopback, link-local,
   and reserved IP addresses.
-- The public dashboard mode is suitable only for local or trusted-network
-  demonstrations. Add authentication, authorization, HTTPS, and production
-  deployment controls before exposing the API to untrusted users.
+- The included dashboard is configured for direct access in the demonstration
+  workflow. Teams deploying it for multiple users can place it behind their
+  preferred authentication and authorization layer.
+- AI-generated content and compliance context should be reviewed by the
+  responsible product or export team before publication.
 
 ## License
 
