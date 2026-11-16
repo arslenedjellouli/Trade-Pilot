@@ -339,7 +339,3 @@ non-production credentials.
   preferred authentication and authorization layer.
 - AI-generated content and compliance context should be reviewed by the
   responsible product or export team before publication.
-
-## License
-
-TradePilot is released under the MIT License. See [LICENSE](LICENSE).
