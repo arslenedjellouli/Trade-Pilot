@@ -2,9 +2,6 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
-    # Auth
-    path('auth/login/',             views.LoginView.as_view(),           name='login'),
-
     # Products
     path('products/',               views.ProductListView.as_view(),     name='product-list'),
     path('products/<str:pid>/',     views.ProductDetailView.as_view(),   name='product-detail'),

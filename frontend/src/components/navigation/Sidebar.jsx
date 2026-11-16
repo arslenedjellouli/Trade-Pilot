@@ -1,5 +1,4 @@
-import { NavLink, useNavigate } from 'react-router-dom'
-import { useAppStore } from '../../store/useAppStore'
+import { NavLink } from 'react-router-dom'
 import logoCompact from '../../../assets/logo.png'
 
 const links = [
@@ -24,15 +23,6 @@ const links = [
 ]
 
 export default function Sidebar() {
-  const navigate = useNavigate()
-  const user = useAppStore(s => s.auth.user)
-  const logout = useAppStore(s => s.logout)
-
-  const handleLogout = () => {
-    logout()
-    navigate('/login')
-  }
-
   return (
     <aside className="flex h-full w-64 shrink-0 flex-col border-r border-[rgb(45,105,235)]/15 bg-white shadow-[inset_-1px_0_0_rgba(45,105,235,0.06)] backdrop-blur-xl">
       <div className="border-b border-[rgb(45,105,235)]/10 px-4 py-4">
@@ -76,16 +66,6 @@ export default function Sidebar() {
           </p>
         </div>
       </nav>
-      <div className="border-t border-[rgb(45,105,235)]/10 p-4">
-        <p className="truncate text-xs text-black/60">{user?.email || 'Signed in user'}</p>
-        <button
-          type="button"
-          onClick={handleLogout}
-          className="mt-2 text-sm font-semibold text-[rgb(45,105,235)] hover:underline"
-        >
-          Sign out
-        </button>
-      </div>
     </aside>
   )
 }

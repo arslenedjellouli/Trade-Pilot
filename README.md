@@ -11,7 +11,7 @@ and an optional Streamlit interface.
 
 The React frontend provides:
 
-- An authenticated dashboard for saved products.
+- A dashboard for saved products with direct access in local/demo mode.
 - A product wizard for image upload, OCR, AI enrichment, and product creation.
 - A product editor for corrections, translations, and PDF downloads.
 - Compliance chat with optional product-image context.
@@ -91,8 +91,6 @@ Edit `.env` before starting Django. At minimum, configure:
 
 ```env
 DJANGO_SECRET_KEY=use-a-long-random-value
-AUTH_EMAIL=admin@example.com
-AUTH_PASSWORD=use-a-strong-password
 COOKIE_PASSWORD=use-a-separate-cookie-secret
 ```
 
@@ -149,7 +147,7 @@ Open `http://localhost:8501`.
 
 ## Typical user workflow
 
-1. Open the React frontend and sign in with `AUTH_EMAIL` and `AUTH_PASSWORD`.
+1. Open the React frontend; it loads directly into the dashboard.
 2. Select **Products** and create a product.
 3. Upload a product image, then run the OCR/AI pipeline.
 4. Review and correct the generated fields.
@@ -174,11 +172,12 @@ are excluded from Git. Re-run ingestion when the source documents change.
 
 ## API overview
 
-All endpoints except login require an expiring bearer token returned by login.
+The current frontend/API mode is intentionally open for local demos and
+development. Put the API behind a trusted network or add production
+authentication before exposing it publicly.
 
 | Method | Endpoint | Purpose |
 |---|---|---|
-| `POST` | `/api/auth/login/` | Authenticate the configured account |
 | `GET` | `/api/products/` | List saved products |
 | `POST` | `/api/products/` | Create a product |
 | `GET/PUT/DELETE` | `/api/products/<id>/` | Read, update, or delete a product |
@@ -208,8 +207,6 @@ Run the backend checks from the repository root:
 
 ```powershell
 $env:DJANGO_SECRET_KEY = "local-test-secret"
-$env:AUTH_EMAIL = "admin@example.com"
-$env:AUTH_PASSWORD = "local-test-password"
 $env:DEBUG = "false"
 python manage.py test
 python manage.py check
@@ -224,8 +221,7 @@ npm run build
 npm audit
 ```
 
-The test suite includes authentication, product API, and response-shape
-regressions. Provider-backed AI behavior should be tested separately with
+The test suite includes product API and response-shape regressions. Provider-backed AI behavior should be tested separately with
 non-production credentials.
 
 ## Security and privacy

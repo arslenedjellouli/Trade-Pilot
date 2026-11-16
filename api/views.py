@@ -6,7 +6,6 @@ import json
 import logging
 import os
 import re
-import secrets
 import shutil
 import sys
 import tempfile
@@ -15,7 +14,6 @@ import uuid
 from pathlib import Path
 
 from django.conf import settings
-from django.core.signing import BadSignature, SignatureExpired, TimestampSigner
 from django.http import HttpResponse, JsonResponse, StreamingHttpResponse
 from django.utils.decorators import method_decorator
 from django.views import View
@@ -186,55 +184,6 @@ def _resolve_media_path(value):
         return resolved
     except (OSError, ValueError):
         return None
-
-
-def _auth_token(email):
-    return TimestampSigner(key=settings.SECRET_KEY).sign(email)
-
-
-def _authenticated(request):
-    header = request.headers.get('Authorization', '')
-    if not header.startswith('Bearer '):
-        return False
-    try:
-        email = TimestampSigner(key=settings.SECRET_KEY).unsign(
-            header[7:],
-            max_age=int(os.getenv('AUTH_TOKEN_MAX_AGE', '3600')),
-        )
-    except (BadSignature, SignatureExpired, ValueError):
-        return False
-    return bool(email)
-
-
-def api_auth_required(view_func):
-    def wrapped(view, request, *args, **kwargs):
-        if not _authenticated(request):
-            return _err('Authentication required', 401)
-        return view_func(view, request, *args, **kwargs)
-    return wrapped
-
-
-# ── Auth ──────────────────────────────────────────────────────────────────────
-
-@method_decorator(csrf_exempt, name='dispatch')
-class LoginView(View):
-    def post(self, request):
-        data = _json_body(request)
-        email = str(data.get('email', '')).strip().lower()
-        password = str(data.get('password', ''))
-        configured_email = os.getenv('AUTH_EMAIL', '').strip().lower()
-        configured_password = os.getenv('AUTH_PASSWORD', '')
-        if (
-            not configured_email
-            or not configured_password
-            or not secrets.compare_digest(email, configured_email)
-            or not secrets.compare_digest(password, configured_password)
-        ):
-            return _err('Invalid credentials', 401)
-        return JsonResponse({
-            'token': _auth_token(email),
-            'user':  {'email': email, 'name': email.split('@')[0]},
-        })
 
 
 # ── Products ──────────────────────────────────────────────────────────────────
@@ -535,19 +484,3 @@ class ChatMessageView(View):
         response['X-Accel-Buffering'] = 'no'
         response['Cache-Control']     = 'no-cache'
         return response
-
-
-for _view in (
-    ProductListView,
-    ProductDetailView,
-    AIPipelineView,
-    AIGeneratePDFView,
-    AIGenerateProductView,
-    AITranslateView,
-    AIImproveView,
-    ChatOCRView,
-    ChatMessageView,
-):
-    _view.dispatch = method_decorator(csrf_exempt)(
-        api_auth_required(_view.dispatch)
-    )

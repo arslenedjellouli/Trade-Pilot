@@ -42,8 +42,6 @@ function Bubble({ role, content, streaming }) {
 }
 
 export default function Chat() {
-  const token = useAppStore(s => s.auth.token)
-
   const [messages,    setMessages]    = useState(loadMessages)
   const [input,       setInput]       = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
@@ -68,7 +66,6 @@ export default function Chat() {
     try {
       const res  = await fetch(`${API_URL}/chat/ocr/`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
         body: form,
       })
       const data = await res.json()
@@ -98,7 +95,6 @@ export default function Chat() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           message: msg,

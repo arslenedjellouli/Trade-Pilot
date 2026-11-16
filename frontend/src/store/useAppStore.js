@@ -2,24 +2,8 @@ import { create } from 'zustand'
 import { getProducts, createProduct, updateProduct } from '../api/products'
 
 export const useAppStore = create((set, get) => ({
-  auth: {
-    token: localStorage.getItem('token') || null,
-    user:  localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')) : null,
-  },
   products: [],
   loading:  false,
-
-  login: (token, user) => {
-    localStorage.setItem('token', token)
-    localStorage.setItem('user', JSON.stringify(user))
-    set({ auth: { token, user } })
-  },
-
-  logout: () => {
-    localStorage.removeItem('token')
-    localStorage.removeItem('user')
-    set({ auth: { token: null, user: null } })
-  },
 
   fetchProducts: async () => {
     set({ loading: true })
