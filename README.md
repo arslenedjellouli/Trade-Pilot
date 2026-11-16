@@ -5,17 +5,34 @@ and images into multilingual, export-ready product sheets. It combines a
 React workspace, a Django API, AI enrichment services, compliance retrieval,
 and an optional Streamlit interface.
 
+It is designed for teams that need to move from a product image or rough
+product information to a reviewed export document. The application keeps the
+generated product record editable: AI suggestions are inputs for human review,
+not a replacement for approval.
+
 ## What the project does
 
 ### Product workspace
 
 The React frontend provides:
 
-- A dashboard for saved products with direct access in local/demo mode.
-- A product wizard for image upload, OCR, AI enrichment, and product creation.
-- A product editor for corrections, translations, and PDF downloads.
-- Compliance chat with optional product-image context.
-- Localized product data for English, French, Arabic, and Spanish.
+- **Dashboard:** browse saved products, see their current state, and open a
+  product for editing.
+- **Product wizard:** upload a product image, extract visible information,
+  enrich the record with AI, review the result, and create a product.
+- **Product editor:** correct names, descriptions, specifications, pricing,
+  compliance fields, and other generated values before exporting.
+- **Translation:** produce localized product content in English, French,
+  Arabic, or Spanish.
+- **PDF export:** generate a formatted product sheet suitable for sharing or
+  further review.
+- **Compliance chat:** ask export and compliance questions using the local
+  knowledge base, with optional image context for visual checks.
+
+The dashboard opens directly without a login in the current local/demo
+configuration. This is intentional for the supplied demonstration workflow;
+see [Security and privacy](#security-and-privacy) before deploying it on a
+shared or public network.
 
 ### AI product pipeline
 
@@ -30,6 +47,16 @@ When an image is submitted through the wizard, the API runs this pipeline:
 AI services are optional during setup, but their API keys are required for
 OCR, enrichment, translation, chat, and RAG features.
 
+### What each service contributes
+
+| Capability | Input | Result | Main dependency |
+|---|---|---|---|
+| OCR and visual audit | Product image | Extracted text and visual observations | NVIDIA vision service |
+| Compliance retrieval | Product question or image context | Relevant passages from approved PDFs | ChromaDB + embeddings |
+| Product enrichment | OCR output and retrieved context | Structured product fields | Gemini, with Groq fallback |
+| Translation | Product fields and target language | Localized product content | Mistral |
+| Product export | Reviewed product record | PDF product sheet | ReportLab |
+
 ### Two available interfaces
 
 | Interface | Purpose | URL |
@@ -39,6 +66,35 @@ OCR, enrichment, translation, chat, and RAG features.
 
 The React application is the recommended interface for new development. The
 Streamlit application remains available for the original workflow and demos.
+
+## Quick start
+
+The shortest local setup is:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+Copy-Item .env.example .env
+python manage.py migrate
+```
+
+Start the API in one terminal:
+
+```powershell
+python manage.py runserver 127.0.0.1:8000
+```
+
+Start the frontend in another terminal:
+
+```powershell
+cd frontend
+npm install
+npm run dev -- --host 127.0.0.1
+```
+
+Then open `http://127.0.0.1:5173/`. The frontend development server proxies
+API and media requests to Django, so both processes must be running.
 
 ## Architecture
 
@@ -97,6 +153,22 @@ COOKIE_PASSWORD=use-a-separate-cookie-secret
 Add `NVIDIA_API_KEY`, `GEMINI_API_KEY`, `GROQ_API_KEY`, and
 `MISTRAL_API_KEY` for the corresponding AI features.
 
+#### Configuration reference
+
+| Variable | Required for | Description |
+|---|---|---|
+| `DJANGO_SECRET_KEY` | Django | Secret used by Django security features |
+| `COOKIE_PASSWORD` | Streamlit | Secret for Streamlit's cookie handling |
+| `NVIDIA_API_KEY` | OCR, RAG, visual audit | NVIDIA model access |
+| `GEMINI_API_KEY` | Enrichment | Gemini product-field generation |
+| `GROQ_API_KEY` | Enrichment fallback | Alternative model provider |
+| `MISTRAL_API_KEY` | Translation | Translation requests |
+| `ALLOWED_HOSTS` | Deployment | Hosts accepted by Django |
+| `CORS_ALLOWED_ORIGINS` | Separate frontend/API | Browser origins allowed to call the API |
+
+Only configure the provider keys for features you intend to use. Never place
+real credentials in the repository or in frontend code.
+
 ### Database and API
 
 ```powershell
@@ -148,12 +220,23 @@ Open `http://localhost:8501`.
 ## Typical user workflow
 
 1. Open the React frontend; it loads directly into the dashboard.
-2. Select **Products** and create a product.
-3. Upload a product image, then run the OCR/AI pipeline.
-4. Review and correct the generated fields.
-5. Save the product.
-6. Open the product editor to translate content or download a PDF.
-7. Use **Compliance Chat** for export questions and optional image audits.
+2. Select **New product** and upload a product image.
+3. Run the OCR and enrichment pipeline.
+4. Inspect the extracted text, detected attributes, and compliance context.
+5. Correct or complete the generated fields before saving.
+6. Open the saved product from the dashboard.
+7. Translate the product when a target market requires another language.
+8. Download the reviewed PDF product sheet.
+9. Use **Compliance Chat** to investigate export questions or audit another
+   image.
+
+### Expected outputs
+
+- A saved product record in the local SQLite database.
+- Product images under the local media directory.
+- A localized, editable product representation.
+- A generated PDF available from the product editor.
+- Chat responses streamed progressively to the browser.
 
 ## RAG knowledge base
 
@@ -169,6 +252,10 @@ To use compliance retrieval:
 
 The generated ChromaDB files in `data/vector_db/` are local runtime data and
 are excluded from Git. Re-run ingestion when the source documents change.
+
+The quality of retrieval depends on the source documents. Use approved,
+up-to-date compliance documents and treat retrieved passages as assistance
+that still requires a qualified review.
 
 ## API overview
 
@@ -201,6 +288,16 @@ data/raw_pdfs/          Local source documents for RAG ingestion
 specs/                  Technical specifications
 ```
 
+## Data lifecycle
+
+- Product records are stored in the local SQLite database.
+- Uploaded images are served through Django media URLs.
+- Images uploaded only for standalone OCR are removed after processing.
+- Product-associated images are removed when their product is deleted.
+- Vector indexes and generated runtime files are local and ignored by Git.
+- No provider API key should ever be sent from the browser; provider calls are
+  made by the backend.
+
 ## Testing and quality checks
 
 Run the backend checks from the repository root:
@@ -224,6 +321,16 @@ npm audit
 The test suite includes product API and response-shape regressions. Provider-backed AI behavior should be tested separately with
 non-production credentials.
 
+## Current limitations
+
+- AI output depends on external provider availability, model behavior, and
+  configured quotas.
+- The default SQLite setup is intended for local development and small demos,
+  not high-concurrency production workloads.
+- The current dashboard/API mode has no user authentication or authorization.
+- Compliance answers are informational and must be reviewed against the
+  applicable regulations and source documents.
+
 ## Security and privacy
 
 - Never commit `.env`, API keys, passwords, SQLite databases, uploads, logs, or
@@ -235,6 +342,9 @@ non-production credentials.
   are deleted after processing.
 - The browser tool only accepts HTTPS and blocks private, loopback, link-local,
   and reserved IP addresses.
+- The public dashboard mode is suitable only for local or trusted-network
+  demonstrations. Add authentication, authorization, HTTPS, and production
+  deployment controls before exposing the API to untrusted users.
 
 ## License
 
